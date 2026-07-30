@@ -3,8 +3,173 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<link rel="stylesheet" type="text/css" href="style.css">
 <title>Ma To-Do List</title>
+<style>
+  :root {
+    --bg: #f4f6f8;
+    --card: #ffffff;
+    --primary: #2563eb;
+    --primary-dark: #1d4ed8;
+    --text: #1f2937;
+    --muted: #6b7280;
+    --done: #9ca3af;
+    --danger: #ef4444;
+    --border: #e5e7eb;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    background: var(--bg);
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    padding: 40px 16px;
+  }
+
+  .app {
+    background: var(--card);
+    width: 100%;
+    max-width: 480px;
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+    padding: 28px;
+  }
+
+  h1 {
+    font-size: 22px;
+    color: var(--text);
+    margin-bottom: 4px;
+  }
+
+  .subtitle {
+    font-size: 13px;
+    color: var(--muted);
+    margin-bottom: 20px;
+  }
+
+  .input-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+
+  #taskInput {
+    flex: 1;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 14px;
+    outline: none;
+  }
+
+  #taskInput:focus {
+    border-color: var(--primary);
+  }
+
+  #addBtn {
+    background: var(--primary);
+    color: white;
+    border: none;
+    padding: 10px 16px;
+    border-radius: 8px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+
+  #addBtn:hover { background: var(--primary-dark); }
+
+  .filters {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 16px;
+  }
+
+  .filter-btn {
+    background: none;
+    border: 1px solid var(--border);
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    cursor: pointer;
+    color: var(--muted);
+  }
+
+  .filter-btn.active {
+    background: var(--primary);
+    color: white;
+    border-color: var(--primary);
+  }
+
+  ul#taskList {
+    list-style: none;
+  }
+
+  li.task {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 4px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  li.task .task-text {
+    flex: 1;
+    font-size: 14px;
+    color: var(--text);
+    word-break: break-word;
+  }
+
+  li.task.completed .task-text {
+    text-decoration: line-through;
+    color: var(--done);
+  }
+
+  li.task input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    accent-color: var(--primary);
+  }
+
+  .delete-btn {
+    background: none;
+    border: none;
+    color: var(--danger);
+    font-size: 16px;
+    cursor: pointer;
+    line-height: 1;
+    padding: 4px;
+  }
+
+  .empty-msg {
+    text-align: center;
+    color: var(--muted);
+    font-size: 13px;
+    padding: 24px 0;
+  }
+
+  .footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 16px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  #clearCompleted {
+    background: none;
+    border: none;
+    color: var(--muted);
+    text-decoration: underline;
+    cursor: pointer;
+    font-size: 12px;
+  }
+</style>
 </head>
 <body>
 
@@ -31,7 +196,156 @@
   </div>
 </div>
 
-<script src="script.js"></script>
+<script>
+  // ---------------------------------------------------------
+  // CONNEXION À L'API
+  // ---------------------------------------------------------
+  const API_URL = "https://todo-api-q8ta.onrender.com";
+
+  // ---- État de l'application ----
+  let tasks = [];
+  let currentFilter = 'all';
+
+  // ---- Éléments du DOM ----
+  const taskInput = document.getElementById('taskInput');
+  const addBtn = document.getElementById('addBtn');
+  const taskList = document.getElementById('taskList');
+  const taskCount = document.getElementById('taskCount');
+  const clearCompletedBtn = document.getElementById('clearCompleted');
+  const filterBtns = document.querySelectorAll('.filter-btn');
+
+  // ---- Charger les tâches depuis l'API au démarrage ----
+  async function loadTasks() {
+    try {
+      const res = await fetch(`${API_URL}/tasks`);
+      tasks = await res.json();
+      render();
+    } catch (err) {
+      console.error("Erreur de chargement :", err);
+      taskList.innerHTML = '<p class="empty-msg">Impossible de contacter le serveur. Vérifie que l\'API est bien démarrée.</p>';
+    }
+  }
+
+  // ---- Ajouter une tâche (POST vers l'API) ----
+  async function addTask() {
+    const text = taskInput.value.trim();
+    if (text === '') return;
+
+    try {
+      const res = await fetch(`${API_URL}/tasks`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text })
+      });
+      const newTask = await res.json();
+      tasks.unshift(newTask);
+      taskInput.value = '';
+      render();
+    } catch (err) {
+      console.error("Erreur d'ajout :", err);
+    }
+  }
+
+  // ---- Basculer l'état terminé/non terminé (PUT vers l'API) ----
+  async function toggleTask(id) {
+    const task = tasks.find(t => t.id === id);
+    if (!task) return;
+
+    try {
+      const res = await fetch(`${API_URL}/tasks/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ completed: !task.completed })
+      });
+      const updated = await res.json();
+      tasks = tasks.map(t => t.id === id ? updated : t);
+      render();
+    } catch (err) {
+      console.error("Erreur de mise à jour :", err);
+    }
+  }
+
+  // ---- Supprimer une tâche (DELETE vers l'API) ----
+  async function deleteTask(id) {
+    try {
+      await fetch(`${API_URL}/tasks/${id}`, { method: 'DELETE' });
+      tasks = tasks.filter(task => task.id !== id);
+      render();
+    } catch (err) {
+      console.error("Erreur de suppression :", err);
+    }
+  }
+
+  // ---- Effacer les tâches terminées (plusieurs appels DELETE) ----
+  async function clearCompleted() {
+    const completedTasks = tasks.filter(t => t.completed);
+    try {
+      await Promise.all(
+        completedTasks.map(t => fetch(`${API_URL}/tasks/${t.id}`, { method: 'DELETE' }))
+      );
+      tasks = tasks.filter(t => !t.completed);
+      render();
+    } catch (err) {
+      console.error("Erreur lors du nettoyage :", err);
+    }
+  }
+
+  // ---- Filtrer les tâches selon le filtre actif ----
+  function getFilteredTasks() {
+    if (currentFilter === 'active') return tasks.filter(t => !t.completed);
+    if (currentFilter === 'completed') return tasks.filter(t => t.completed);
+    return tasks;
+  }
+
+  // ---- Afficher les tâches à l'écran ----
+  function render() {
+    const filtered = getFilteredTasks();
+    taskList.innerHTML = '';
+
+    if (filtered.length === 0) {
+      taskList.innerHTML = '<p class="empty-msg">Aucune tâche à afficher</p>';
+    } else {
+      filtered.forEach(task => {
+        const li = document.createElement('li');
+        li.className = 'task' + (task.completed ? ' completed' : '');
+
+        li.innerHTML = `
+          <input type="checkbox" ${task.completed ? 'checked' : ''}>
+          <span class="task-text"></span>
+          <button class="delete-btn">✕</button>
+        `;
+
+        li.querySelector('.task-text').textContent = task.text;
+        li.querySelector('input').addEventListener('change', () => toggleTask(task.id));
+        li.querySelector('.delete-btn').addEventListener('click', () => deleteTask(task.id));
+
+        taskList.appendChild(li);
+      });
+    }
+
+    const remaining = tasks.filter(t => !t.completed).length;
+    taskCount.textContent = `${remaining} tâche(s) restante(s)`;
+  }
+
+  // ---- Événements ----
+  addBtn.addEventListener('click', addTask);
+  taskInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') addTask();
+  });
+  clearCompletedBtn.addEventListener('click', clearCompleted);
+
+  filterBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      filterBtns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentFilter = btn.dataset.filter;
+      render();
+    });
+  });
+
+  // ---- Chargement initial depuis l'API ----
+  loadTasks();
+</script>
 
 </body>
 </html>
